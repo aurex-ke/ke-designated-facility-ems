@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "If you reference this project, please cite it as below."
+title: "ke-designated-facility-ems"
+abstract: "Simulation-first, open-source reference implementation of an energy management system for Kenyan designated facilities. Simulation only; nothing is deployed."
+authors:
+  - alias: "Aurex"
+repository-code: "https://github.com/aurex-ke/ke-designated-facility-ems"
+license: MIT
