@@ -1,0 +1,50 @@
+# deploy/compose.yaml
+#
+# M2: OpenEMS Edge and its built-in UI, simulation only. Nothing here is deployed
+# anywhere. OpenEMS is run unmodified from its upstream images (see ADR 0002 and
+# ADR 0003). This project is not affiliated with or endorsed by OpenEMS.
+#
+# Usage (from this directory):
+#   cp .env.example .env
+#   docker compose config      # validate and show the resolved file
+#   docker compose up -d
+#
+# Every setting comes from deploy/.env. If a value is missing or empty, Compose
+# stops with an error instead of falling back to a default (fail safe).
+#
+# Not settings, so written here: the container-internal ports (8080, 8085, 80),
+# the service names, and the volume paths. They are facts about the upstream images.
+
+name: ke-ems
+
+services:
+  openems-edge:
+    image: "${OPENEMS_EDGE_IMAGE:?Set OPENEMS_EDGE_IMAGE in deploy/.env (see .env.example)}"
+    hostname: openems-edge
+    restart: unless-stopped
+    volumes:
+      # Edge configuration (OSGi config files) and runtime data.
+      - openems-edge-conf:/var/opt/openems/config:rw
+      - openems-edge-data:/var/opt/openems/data:rw
+    ports:
+      # Bound to BIND_ADDRESS (127.0.0.1 by default in .env.example). Docker-published
+      # ports bypass ufw and firewalld, so this binding is the access control.
+      - "${BIND_ADDRESS:?Set BIND_ADDRESS in deploy/.env}:${EDGE_FELIX_PORT:?Set EDGE_FELIX_PORT in deploy/.env}:8080" # Apache Felix console
+      - "${BIND_ADDRESS}:${EDGE_WEBSOCKET_PORT:?Set EDGE_WEBSOCKET_PORT in deploy/.env}:8085" # UI websocket (needed? tested at M2 smoke test)
+
+  openems-ui:
+    image: "${OPENEMS_UI_IMAGE:?Set OPENEMS_UI_IMAGE in deploy/.env (see .env.example)}"
+    hostname: openems-ui
+    restart: unless-stopped
+    depends_on:
+      - openems-edge
+    environment:
+      # Documented settings of the upstream UI image: where to reach Edge's websocket.
+      WEBSOCKET_HOST: openems-edge
+      WEBSOCKET_PORT: "8085"
+    ports:
+      - "${BIND_ADDRESS}:${UI_HTTP_PORT:?Set UI_HTTP_PORT in deploy/.env}:80"
+
+volumes:
+  openems-edge-conf:
+  openems-edge-data:
