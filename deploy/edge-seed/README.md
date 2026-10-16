@@ -21,8 +21,16 @@ retrieved 16 Oct 2026). Default values were accepted except the datasource
 not a hotel profile. Nothing here says anything about hotel energy use. The
 hotel scenario (`hotel-60rooms-sim-v1`) arrives in milestone 3.
 
-Not yet wired into Compose: the init service that copies `config/` into a fresh
-config volume arrives in the next change. Until then these files are inert.
+## How it is used
+
+The `openems-edge-seed` service in `deploy/compose.yaml` copies `config/` into the
+Edge config volume the first time that volume is used (when `Simulator/` does not
+exist in it yet). After that it never overwrites anything. To start again from the
+seed, remove the stack's volumes: `docker compose down -v` deletes the Edge
+configuration and data, so use it with care.
+
+Validation of this mechanism is part of milestone 2 and is not complete until the
+smoke test passes.
 
 ## Do not edit by hand
 

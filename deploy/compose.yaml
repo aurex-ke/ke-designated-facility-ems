@@ -10,7 +10,8 @@
 #   docker compose up -d
 #
 # Every setting comes from deploy/.env. If a value is missing or empty, Compose
-# stops with an error instead of falling back to a default (fail safe).
+# stops with an error instead of falling back to a default (fail safe). When an
+# update adds variables to .env.example, add them to your .env as well.
 #
 # Not settings, so written here: the container-internal ports (8080, 8085, 80),
 # the service names, and the volume paths. They are facts about the upstream images.
@@ -18,10 +19,42 @@
 name: ke-ems
 
 services:
+  # One-shot helper. Copies the simulated-chain seed config (deploy/edge-seed/config)
+  # into the Edge config volume the first time that volume is used, then exits.
+  # It reuses the pinned Edge image, so no extra image is introduced. If the volume
+  # already holds the seeded files it does nothing, so it never overwrites changes.
+  openems-edge-seed:
+    image: "${OPENEMS_EDGE_IMAGE:?Set OPENEMS_EDGE_IMAGE in deploy/.env (see .env.example)}"
+    restart: "no"
+    entrypoint: ["/bin/sh", "-eu", "-c"]
+    command:
+      - |
+        dest=/var/opt/openems/config
+        if [ -d "$$dest/Simulator" ]; then
+          echo "seed: $$dest/Simulator already exists, nothing to do"
+          exit 0
+        fi
+        cp -R /seed/. "$$dest/"
+        chown -R 911:911 "$$dest/Controller" "$$dest/Simulator"
+        echo "seed: copied simulated chain config into $$dest"
+    volumes:
+      - openems-edge-conf:/var/opt/openems/config:rw
+      - ./edge-seed/config:/seed:ro
+
   openems-edge:
     image: "${OPENEMS_EDGE_IMAGE:?Set OPENEMS_EDGE_IMAGE in deploy/.env (see .env.example)}"
     hostname: openems-edge
     restart: unless-stopped
+    depends_on:
+      openems-edge-seed:
+        condition: service_completed_successfully
+    # Memory cap for the Java process. Keep it generous (see .env.example).
+    mem_limit: "${EDGE_MEM_LIMIT:?Set EDGE_MEM_LIMIT in deploy/.env}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "${LOG_MAX_SIZE:?Set LOG_MAX_SIZE in deploy/.env}"
+        max-file: "${LOG_MAX_FILE:?Set LOG_MAX_FILE in deploy/.env}"
     volumes:
       # Edge configuration (OSGi config files) and runtime data.
       - openems-edge-conf:/var/opt/openems/config:rw
@@ -29,8 +62,10 @@ services:
     ports:
       # Bound to BIND_ADDRESS (127.0.0.1 by default in .env.example). Docker-published
       # ports bypass ufw and firewalld, so this binding is the access control.
+      # The websocket (container port 8085) is deliberately NOT published: the UI
+      # container reaches it over the Compose network. Observed on 2026-10-16: the UI
+      # logged in and showed live data with only the UI port forwarded.
       - "${BIND_ADDRESS:?Set BIND_ADDRESS in deploy/.env}:${EDGE_FELIX_PORT:?Set EDGE_FELIX_PORT in deploy/.env}:8080" # Apache Felix console
-      - "${BIND_ADDRESS}:${EDGE_WEBSOCKET_PORT:?Set EDGE_WEBSOCKET_PORT in deploy/.env}:8085" # UI websocket (needed? tested at M2 smoke test)
 
   openems-ui:
     image: "${OPENEMS_UI_IMAGE:?Set OPENEMS_UI_IMAGE in deploy/.env (see .env.example)}"
@@ -38,6 +73,11 @@ services:
     restart: unless-stopped
     depends_on:
       - openems-edge
+    logging:
+      driver: json-file
+      options:
+        max-size: "${LOG_MAX_SIZE:?Set LOG_MAX_SIZE in deploy/.env}"
+        max-file: "${LOG_MAX_FILE:?Set LOG_MAX_FILE in deploy/.env}"
     environment:
       # Documented settings of the upstream UI image: where to reach Edge's websocket.
       WEBSOCKET_HOST: openems-edge
