@@ -19,10 +19,16 @@
 name: ke-ems
 
 services:
-  # One-shot helper. Copies the simulated-chain seed config (deploy/edge-seed/config)
-  # into the Edge config volume the first time that volume is used, then exits.
-  # It reuses the pinned Edge image, so no extra image is introduced. If the volume
-  # already holds the seeded files it does nothing, so it never overwrites changes.
+  # One-shot helper. Prepares a fresh Edge config volume, then exits:
+  #   1. If the volume is empty, it installs the image's own default config first.
+  #      Edge's start-up script (init-openems-config) installs those defaults only
+  #      into an EMPTY config directory, so adding our files first would skip them
+  #      and leave Edge without its scheduler and websocket controller.
+  #   2. It adds the simulated-chain seed config (deploy/edge-seed/config).
+  # If the volume already holds the seeded files it does nothing, so it never
+  # overwrites changes. It reuses the pinned Edge image, so no extra image is
+  # introduced. The defaults path below was read from that image's init script on
+  # 2026-10-16 (openems/edge:2026.9.0). Re-check it whenever the image is updated.
   openems-edge-seed:
     image: "${OPENEMS_EDGE_IMAGE:?Set OPENEMS_EDGE_IMAGE in deploy/.env (see .env.example)}"
     restart: "no"
@@ -30,12 +36,21 @@ services:
     command:
       - |
         dest=/var/opt/openems/config
+        defaults=/var/lib/openems-default-config
         if [ -d "$$dest/Simulator" ]; then
           echo "seed: $$dest/Simulator already exists, nothing to do"
           exit 0
         fi
+        if [ -z "$$(ls -A "$$dest")" ]; then
+          if [ ! -d "$$defaults" ]; then
+            echo "seed: $$defaults not found in this image; refusing to continue" >&2
+            exit 1
+          fi
+          cp -a "$$defaults/." "$$dest/"
+          echo "seed: installed the image default config into the empty volume"
+        fi
         cp -R /seed/. "$$dest/"
-        chown -R 911:911 "$$dest/Controller" "$$dest/Simulator"
+        chown -R 911:911 "$$dest"
         echo "seed: copied simulated chain config into $$dest"
     volumes:
       - openems-edge-conf:/var/opt/openems/config:rw

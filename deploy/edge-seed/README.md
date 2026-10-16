@@ -23,14 +23,26 @@ hotel scenario (`hotel-60rooms-sim-v1`) arrives in milestone 3.
 
 ## How it is used
 
-The `openems-edge-seed` service in `deploy/compose.yaml` copies `config/` into the
-Edge config volume the first time that volume is used (when `Simulator/` does not
-exist in it yet). After that it never overwrites anything. To start again from the
-seed, remove the stack's volumes: `docker compose down -v` deletes the Edge
-configuration and data, so use it with care.
+The `openems-edge-seed` service in `deploy/compose.yaml` prepares a fresh Edge
+config volume in two steps:
+
+1. If the volume is empty, it installs the image's own default configuration
+   (shipped in the image at `/var/lib/openems-default-config`). Edge's start-up
+   script only installs those defaults into an empty directory, so they would be
+   skipped once our files are in place. Without them Edge has no scheduler and no
+   websocket controller, and the simulated chain never runs.
+2. It copies the files in `config/` into the volume.
+
+If `Simulator/` already exists in the volume, it does nothing and never overwrites
+anything. To start again from the seed, remove the stack's volumes:
+`docker compose down -v` deletes the Edge configuration and data, so use it with
+care.
+
+This relies on internals of `openems/edge:2026.9.0`, read from its init script on
+16 Oct 2026. Re-check them whenever the image is updated.
 
 Validation of this mechanism is part of milestone 2 and is not complete until the
-smoke test passes.
+smoke test passes on a fresh volume.
 
 ## Do not edit by hand
 
