@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+# deploy/smoke-test.sh
+#
+# Smoke test for the M2 stack: OpenEMS Edge and its UI, simulation only.
+# It checks that the stack came up and that the seeded simulated chain is running.
+# It changes nothing. It does not judge the simulated values: the simulated battery
+# drains to 0 % within hours (the chain has no PV), so values are not asserted.
+#
+# Run it with permission to use Docker (normally sudo):
+#   sudo bash deploy/smoke-test.sh [--wait SECONDS]
+#
+#   --wait SECONDS   how long to wait for the first Debug Log line after a start
+#                    (default 90)
+#
+# Settings come from deploy/.env, the file Compose uses. Variables already set in
+# the environment win over the file (as in Compose), so a second copy of the stack
+# can be tested with COMPOSE_PROJECT_NAME and different ports (see docs/runbook.md).
+#
+# Exit codes: 0 no check failed (skipped checks are listed), 1 a check failed,
+#             2 bad usage or missing configuration.
+
+set -u -o pipefail
+
+WAIT=90
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --wait)
+      if [ $# -lt 2 ]; then echo "--wait needs a number of seconds" >&2; exit 2; fi
+      WAIT="$2"; shift 2 ;;
+    -h|--help) sed -n '2,/^$/p' "$0"; exit 0 ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+case "$WAIT" in ''|*[!0-9]*) echo "--wait needs a whole number of seconds" >&2; exit 2 ;; esac
+
+cd "$(dirname "$0")" || exit 2
+if [ ! -f .env ]; then
+  echo "deploy/.env not found. Copy .env.example to .env first." >&2
+  exit 2
+fi
+
+# Read KEY=VALUE lines from .env. Variables already set in the environment win.
+load_env() {
+  local line key value
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in ''|*[!A-Za-z0-9_]*) continue ;; esac
+    if [ -z "${!key+x}" ]; then export "$key=$value"; fi
+  done < .env
+}
+load_env
+
+for var in BIND_ADDRESS EDGE_FELIX_PORT UI_HTTP_PORT; do
+  if [ -z "${!var:-}" ]; then
+    echo "$var is not set in deploy/.env" >&2
+    exit 2
+  fi
+done
+
+# What the seeded chain should activate (see deploy/edge-seed/README.md). These are
+# facts about the seed, not settings.
+EXPECTED_ACTIVATIONS=(
+  "Controller.Debug.Log"
+  "Scheduler.AllAlphabetically"
+  "Simulator.Datasource.CSV.Predefined"
+  "Simulator.GridMeter.Acting"
+  "Simulator.EssSymmetric.Reacting"
+  "Controller.Symmetric.Balancing"
+  "Controller.Api.Websocket"
+  "Core.Energy"
+)
+LIVE_RE='ctrlDebugLog0\].*_sum\[.*ess0\[.*meter0\['
+ROTATION_GRACE_S=120
+
+PASS=0; FAIL=0; SKIP=0
+report() { # status name detail
+  printf '%-5s %-26s %s\n' "$1" "$2" "$3"
+  case "$1" in PASS) PASS=$((PASS + 1)) ;; FAIL) FAIL=$((FAIL + 1)) ;; SKIP) SKIP=$((SKIP + 1)) ;; esac
+}
+info() { printf '%-5s %-26s %s\n' "INFO" "$1" "$2"; }
+
+dc() { docker compose "$@"; }
+http_code() {
+  local code
+  code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$1" 2>/dev/null || true)
+  [ -n "$code" ] || code=000
+  printf '%s' "$code"
+}
+live_lines() { dc logs --no-log-prefix --since 20s openems-edge 2>&1 | grep -E "$LIVE_RE"; }
+
+tmp=$(mktemp) || exit 2
+trap 'rm -f "$tmp"' EXIT
+
+echo "Smoke test: project '$(dc config 2>/dev/null | sed -n 's/^name: //p' | head -n 1)', waiting up to ${WAIT}s for the Debug Log"
+waited=0
+while [ "$waited" -lt "$WAIT" ] && [ -z "$(live_lines | tail -n 1)" ]; do
+  sleep 3
+  waited=$((waited + 3))
+done
+
+# 1. Containers: running, not out-of-memory-killed, never restarted; seed exited 0.
+edge_id=""
+for svc in openems-edge openems-ui; do
+  id=$(dc ps -q "$svc" 2>/dev/null | head -n 1)
+  [ "$svc" = "openems-edge" ] && edge_id="$id"
+  if [ -z "$id" ]; then
+    report FAIL "container $svc" "not found"
+    continue
+  fi
+  state=$(docker inspect -f '{{.State.Running}} oom={{.State.OOMKilled}} restarts={{.RestartCount}}' "$id" 2>&1)
+  if [ "$state" = "true oom=false restarts=0" ]; then
+    report PASS "container $svc" "$state"
+  else
+    report FAIL "container $svc" "$state"
+  fi
+done
+seed_id=$(dc ps -a -q openems-edge-seed 2>/dev/null | head -n 1)
+if [ -z "$seed_id" ]; then
+  report FAIL "container seed" "not found"
+else
+  code=$(docker inspect -f '{{.State.ExitCode}}' "$seed_id" 2>&1)
+  if [ "$code" = "0" ]; then report PASS "seed exit code" "0"; else report FAIL "seed exit code" "$code"; fi
+fi
+
+# 2. The Felix console must ask for a login (401), never answer openly.
+code=$(http_code "http://${BIND_ADDRESS}:${EDGE_FELIX_PORT}/system/console")
+if [ "$code" = "401" ]; then report PASS "console is protected" "HTTP $code"; else report FAIL "console is protected" "HTTP $code (expected 401)"; fi
+
+# 3. The UI answers.
+code=$(http_code "http://${BIND_ADDRESS}:${UI_HTTP_PORT}/")
+if [ "$code" = "200" ]; then report PASS "UI answers" "HTTP $code"; else report FAIL "UI answers" "HTTP $code (expected 200)"; fi
+
+# 4. Startup: every expected component logged "Activate <factory PID>".
+if [ -z "$edge_id" ]; then
+  report FAIL "startup activations" "Edge container not found"
+else
+  started=$(docker inspect -f '{{.State.StartedAt}}' "$edge_id" 2>&1)
+  dc logs --no-log-prefix --since "$started" openems-edge > "$tmp" 2>&1
+  first=$(grep -m 1 -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}' "$tmp" || true)
+  if [ -z "$first" ]; then
+    report FAIL "startup activations" "no timestamped Edge log lines since the container started"
+  else
+    started_s=$(date -u -d "$started" +%s 2>/dev/null || echo 0)
+    first_s=$(date -u -d "$first" +%s 2>/dev/null || echo 0)
+    missing=()
+    for pid in "${EXPECTED_ACTIVATIONS[@]}"; do
+      grep -qF "Activate $pid" "$tmp" || missing+=("$pid")
+    done
+    if [ "${#missing[@]}" -eq 0 ]; then
+      report PASS "startup activations" "all ${#EXPECTED_ACTIVATIONS[@]} found"
+    elif [ $((first_s - started_s)) -gt "$ROTATION_GRACE_S" ]; then
+      report SKIP "startup activations" "startup lines were rotated out of the log; restart the stack to re-run this check"
+    else
+      report FAIL "startup activations" "missing: ${missing[*]}"
+    fi
+  fi
+fi
+
+# 5. Live: the Debug Log prints its summary line, naming the meter and battery.
+lines=$(live_lines)
+count=$(printf '%s\n' "$lines" | grep -c . || true)
+if [ "$count" -ge 1 ]; then
+  report PASS "Debug Log is live" "$count lines in the last 20 s"
+  sum_state=$(printf '%s\n' "$lines" | tail -n 1 | grep -oE '_sum\[State:[A-Za-z]+' | head -n 1 | sed 's/^_sum\[State://')
+  info "sum state" "${sum_state:-unknown} (informational, not a pass/fail criterion)"
+  defekt=$(dc logs --no-log-prefix --since 60s openems-edge 2>&1 | grep -c 'Defekte App' || true)
+  info "'Defekte App' lines" "$defekt in the last 60 s (informational; see docs/runbook.md)"
+else
+  report FAIL "Debug Log is live" "no summary line in the last 20 s"
+fi
+
+# 6. Steady state: no ERROR lines in the last minute.
+errs=$(dc logs --no-log-prefix --since 60s openems-edge 2>&1 | grep -c ' ERROR ' || true)
+if [ "$errs" -eq 0 ]; then report PASS "no recent errors" "0 ERROR lines in the last 60 s"; else report FAIL "no recent errors" "$errs ERROR lines in the last 60 s"; fi
+
+echo "Result: $PASS passed, $FAIL failed, $SKIP skipped"
+[ "$FAIL" -eq 0 ]
