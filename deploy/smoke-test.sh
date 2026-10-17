@@ -75,7 +75,7 @@ EXPECTED_ACTIVATIONS=(
   "Core.Energy"
 )
 LIVE_RE='ctrlDebugLog0\].*_sum\[.*ess0\[.*meter0\['
-ROTATION_GRACE_S=120   # startup lines older than this after container start = rotated out
+ROTATION_GRACE_S=120   # first log line later than this after container start = startup lines are missing
 STEADY_IGNORE_S=60     # seconds after container start whose ERROR lines are ignored
 STEADY_MIN_AGE_S=75    # a young stack is waited for until it is this old
 
@@ -173,7 +173,7 @@ else
     if [ "${#missing[@]}" -eq 0 ]; then
       report PASS "startup activations" "all ${#EXPECTED_ACTIVATIONS[@]} found"
     elif [ $((first_s - started_s)) -gt "$ROTATION_GRACE_S" ]; then
-      report SKIP "startup activations" "startup lines were rotated out of the log; restart the stack to re-run this check"
+      report SKIP "startup activations" "the first log line is more than ${ROTATION_GRACE_S}s after the container started (log rotated, or its start unreadable); recreate the stack to re-run this check"
     else
       report FAIL "startup activations" "missing: ${missing[*]}"
     fi

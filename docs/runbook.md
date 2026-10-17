@@ -102,7 +102,7 @@ Before `down -v`, check `COMPOSE_PROJECT_NAME` really says `ke-ems-seedtest`.
 | `WARN Unable to find ObjectClassDefinition ...` | Upstream wording for several core components at start. No effect observed. |
 | `ERROR Authentication failed` for `authenticateWithToken` | Seen twice at the first browser load, before the guest login. Probably the UI trying a stored token (inference). |
 | `ERROR Unable to read historic data: None of the requested Channels is available` | Seen once, before any simulated component existed. Not seen since. |
-| `_appManager[...] State:INFO: Defekte App erkannt` with `App.Core.Meta[Missing configuration for instance ...]` | Seen on every Debug Log line after the first start on a fresh volume, in both fresh-volume runs on 16 Oct 2026: on 300 consecutive lines in the first run (about 5 minutes at one line per second, my arithmetic) and on 17 lines at the second run's first check, right after start. Not seen on the long-running stack (0 lines), nor after its restart on an already initialised volume. Unknown whether it is a normal first-start phase or caused by our seed order: the long-running stack had no Debug Log during its first minutes, so its own first-start state was never seen. The Core config files were identical on both volumes. The simulated chain kept running and the sum state showed Info meanwhile. The smoke test prints the sum state and the count of these lines for information. Open: how long it lasts. |
+| `_appManager[...] State:INFO: Defekte App erkannt` with `App.Core.Meta[Missing configuration for instance ...]` | Seen on every Debug Log line after the first start on a fresh volume, in both fresh-volume runs on 16 Oct 2026: 300 consecutive lines in the first run (about 5 minutes at one line per second, my arithmetic) and 17 lines at the second run's first check, right after start. Absent after restarts on an already initialised volume: 0 lines across the whole retained log after the 16 Oct 11:22 restart, and 0 lines in the window from about 15 to 75 seconds after the 17 Oct recreate (a period in which a fresh volume showed 17). After the 17 Oct cold boot the sum state read Ok at the first checks, taken well after start; the first minutes were not checked. Unknown whether it is a normal first-start phase or caused by our seed order: the long-running stack had no Debug Log during its first minutes, so its own first-start state was never seen. The Core config files were identical on both volumes. The simulated chain kept running and the sum state showed Info meanwhile. The smoke test prints the sum state and the count of these lines for information. Open: how long it lasts on a fresh volume. |
 
 ## 7. Updating the OpenEMS images
 
@@ -138,30 +138,64 @@ Before `down -v`, check `COMPOSE_PROJECT_NAME` really says `ke-ems-seedtest`.
 
   The second command prints every pause longer than 10 seconds.
 
-## 9. Damaged container log after an abrupt stop
+## 9. Log reads that return nothing
 
-Seen on 17 Oct 2026. The VM had been stopped without a shutdown: the journal of that
-boot ends at the last SSH disconnect, with no shutdown messages. After the next boot
-the stack came back by itself and the Debug Log was running, but the smoke test failed.
-`docker compose logs --tail` worked, while `docker compose logs --since ...` printed
-**nothing and no error**. The container's raw JSON log file held one undecodable line
-out of 25,551 (line 21,828). Our reading, not verified in Docker's source: Docker stops
-reading at the damaged line. The smoke test now fails loudly in this case and says
-"the container log file may be damaged".
+Seen on 17 Oct 2026, after the VM had been stopped abruptly. These are facts from our
+terminal output:
+
+- The journal of that boot ends at the last SSH disconnect, with no shutdown messages.
+- After the next boot the stack came back by itself and the Debug Log was running.
+  `docker compose logs --tail 3` worked, but `docker compose logs --since ...` printed
+  nothing, with no error, in three smoke-test runs.
+- The container's raw JSON log file (6.9 MB, under the 10 MB cap) held one undecodable
+  line out of 25,551 (line 21,828), with 3,723 lines after it.
+- Later the same day, with no change from us, `--since 20s` worked again, but the smoke
+  test found no startup lines and skipped that check.
+- After recreating the Edge and UI containers (which gives them new log files) all 8
+  checks passed.
+
+**What we do not know:** why `--since` returned nothing, and why it recovered. A damaged
+log line is the leading suspect but is unproven, and the damaged file was deleted by
+the recreate before it could be examined further. Log rotation does not obviously
+explain it (the file was well under the cap at the last look, but the time of the
+later run was not recorded).
 
 Check by hand:
 
 ```bash
-sudo docker compose logs --tail 3 openems-edge      # still works
-sudo docker compose logs --since 20s openems-edge   # prints nothing while the Debug Log runs
+sudo docker compose logs --tail 3 openems-edge      # shows the newest lines
+sudo docker compose logs --since 20s openems-edge   # should show about 20 lines while the Debug Log runs
 ```
 
-Fix. This keeps the volumes. Edge restarts (about a minute), the simulated battery
-resets to 50 %, and the old log file is deleted together with the old container:
+Fix (keeps the volumes; Edge restarts for about a minute, the simulated battery resets
+to 50 %, and the old log file is deleted with the old container):
 
 ```bash
 sudo docker compose up -d --force-recreate openems-edge openems-ui
 sudo bash smoke-test.sh
+```
+
+To look at the container's log file before recreating, remember that the folder is
+readable by root only, so wildcards and redirections must run inside `sudo`:
+
+```bash
+EID=$(sudo docker compose ps -q openems-edge)
+sudo sh -c "ls -l /var/lib/docker/containers/$EID/*-json.log"
+sudo python3 - "$EID" <<'PY'
+import glob, json, sys
+path = glob.glob(f"/var/lib/docker/containers/{sys.argv[1]}/*-json.log")[0]
+total = bad = 0
+first_bad = None
+with open(path, "rb") as f:
+    for n, line in enumerate(f, 1):
+        total += 1
+        try:
+            json.loads(line)
+        except Exception:
+            bad += 1
+            first_bad = first_bad or n
+print("lines:", total, "undecodable:", bad, "first undecodable line:", first_bad)
+PY
 ```
 
 Prevention: stop the VM with `sudo poweroff` (section 8).
