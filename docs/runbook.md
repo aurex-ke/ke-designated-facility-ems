@@ -22,6 +22,9 @@ sudo bash smoke-test.sh
   90 seconds for the Debug Log.
 - After an update, if `.env.example` gained variables, add them to your `.env`.
   Compose stops with a clear error when one is missing.
+- The smoke test ignores ERROR lines from the first 60 seconds after Edge started
+  (known startup noise, section 6). Run right after `up -d`, it waits until Edge is
+  75 seconds old before judging errors, so it then takes about 80 seconds.
 
 ## 2. Everyday commands
 
@@ -99,7 +102,7 @@ Before `down -v`, check `COMPOSE_PROJECT_NAME` really says `ke-ems-seedtest`.
 | `WARN Unable to find ObjectClassDefinition ...` | Upstream wording for several core components at start. No effect observed. |
 | `ERROR Authentication failed` for `authenticateWithToken` | Seen twice at the first browser load, before the guest login. Probably the UI trying a stored token (inference). |
 | `ERROR Unable to read historic data: None of the requested Channels is available` | Seen once, before any simulated component existed. Not seen since. |
-| `_appManager[...] State:INFO: Defekte App erkannt` with `App.Core.Meta[Missing configuration for instance ...]` | Seen on 300 consecutive Debug Log lines (about 5 minutes at one line per second, my arithmetic) on a fresh volume on 16 Oct 2026. Not seen on the long-running stack. The Core config files were identical in both. Cause unknown. The simulated chain kept running and the sum state showed Info meanwhile. The smoke test prints the sum state and the count of these lines for information. Open question: does it always clear, and when? |
+| `_appManager[...] State:INFO: Defekte App erkannt` with `App.Core.Meta[Missing configuration for instance ...]` | Seen on every Debug Log line after the first start on a fresh volume, in both fresh-volume runs on 16 Oct 2026: on 300 consecutive lines in the first run (about 5 minutes at one line per second, my arithmetic) and on 17 lines at the second run's first check, right after start. Not seen on the long-running stack (0 lines), nor after its restart on an already initialised volume. Unknown whether it is a normal first-start phase or caused by our seed order: the long-running stack had no Debug Log during its first minutes, so its own first-start state was never seen. The Core config files were identical on both volumes. The simulated chain kept running and the sum state showed Info meanwhile. The smoke test prints the sum state and the count of these lines for information. Open: how long it lasts. |
 
 ## 7. Updating the OpenEMS images
 

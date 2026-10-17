@@ -5,6 +5,9 @@
 # It checks that the stack came up and that the seeded simulated chain is running.
 # It changes nothing. It does not judge the simulated values: the simulated battery
 # drains to 0 % within hours (the chain has no PV), so values are not asserted.
+# Edge logs a few ERROR lines in its first seconds on every healthy start (see
+# docs/runbook.md), so the error check ignores the first 60 s after the container
+# started and, on a young stack, waits until it is 75 s old before judging.
 #
 # Run it with permission to use Docker (normally sudo):
 #   sudo bash deploy/smoke-test.sh [--wait SECONDS]
@@ -72,7 +75,9 @@ EXPECTED_ACTIVATIONS=(
   "Core.Energy"
 )
 LIVE_RE='ctrlDebugLog0\].*_sum\[.*ess0\[.*meter0\['
-ROTATION_GRACE_S=120
+ROTATION_GRACE_S=120   # startup lines older than this after container start = rotated out
+STEADY_IGNORE_S=60     # seconds after container start whose ERROR lines are ignored
+STEADY_MIN_AGE_S=75    # a young stack is waited for until it is this old
 
 PASS=0; FAIL=0; SKIP=0
 report() { # status name detail
@@ -132,17 +137,23 @@ if [ "$code" = "401" ]; then report PASS "console is protected" "HTTP $code"; el
 code=$(http_code "http://${BIND_ADDRESS}:${UI_HTTP_PORT}/")
 if [ "$code" = "200" ]; then report PASS "UI answers" "HTTP $code"; else report FAIL "UI answers" "HTTP $code (expected 200)"; fi
 
+# Container start time, used by checks 4 and 6.
+started=""
+started_s=0
+if [ -n "$edge_id" ]; then
+  started=$(docker inspect -f '{{.State.StartedAt}}' "$edge_id" 2>&1)
+  started_s=$(date -u -d "$started" +%s 2>/dev/null || echo 0)
+fi
+
 # 4. Startup: every expected component logged "Activate <factory PID>".
 if [ -z "$edge_id" ]; then
   report FAIL "startup activations" "Edge container not found"
 else
-  started=$(docker inspect -f '{{.State.StartedAt}}' "$edge_id" 2>&1)
   dc logs --no-log-prefix --since "$started" openems-edge > "$tmp" 2>&1
   first=$(grep -m 1 -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}' "$tmp" || true)
   if [ -z "$first" ]; then
     report FAIL "startup activations" "no timestamped Edge log lines since the container started"
   else
-    started_s=$(date -u -d "$started" +%s 2>/dev/null || echo 0)
     first_s=$(date -u -d "$first" +%s 2>/dev/null || echo 0)
     missing=()
     for pid in "${EXPECTED_ACTIVATIONS[@]}"; do
@@ -171,9 +182,28 @@ else
   report FAIL "Debug Log is live" "no summary line in the last 20 s"
 fi
 
-# 6. Steady state: no ERROR lines in the last minute.
-errs=$(dc logs --no-log-prefix --since 60s openems-edge 2>&1 | grep -c ' ERROR ' || true)
-if [ "$errs" -eq 0 ]; then report PASS "no recent errors" "0 ERROR lines in the last 60 s"; else report FAIL "no recent errors" "$errs ERROR lines in the last 60 s"; fi
+# 6. Steady state: no ERROR lines in the last minute, ignoring the first
+#    STEADY_IGNORE_S seconds after the container started (known startup noise).
+if [ -z "$edge_id" ]; then
+  report FAIL "no recent errors" "Edge container not found"
+else
+  age=$(( $(date -u +%s) - started_s ))
+  if [ "$age" -lt "$STEADY_MIN_AGE_S" ]; then
+    echo "      (stack is ${age}s old; waiting $((STEADY_MIN_AGE_S - age))s so startup errors are out of the window)"
+    sleep $((STEADY_MIN_AGE_S - age))
+  fi
+  now_s=$(date -u +%s)
+  win_s=$((now_s - 60))
+  floor_s=$((started_s + STEADY_IGNORE_S))
+  if [ "$win_s" -lt "$floor_s" ]; then win_s=$floor_s; fi
+  since=$(date -u -d "@$win_s" +%Y-%m-%dT%H:%M:%SZ)
+  errs=$(dc logs --no-log-prefix --since "$since" openems-edge 2>&1 | grep -c ' ERROR ' || true)
+  if [ "$errs" -eq 0 ]; then
+    report PASS "no recent errors" "0 ERROR lines in the last $((now_s - win_s)) s"
+  else
+    report FAIL "no recent errors" "$errs ERROR lines in the last $((now_s - win_s)) s"
+  fi
+fi
 
 echo "Result: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -eq 0 ]
