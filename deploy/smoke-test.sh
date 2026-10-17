@@ -149,9 +149,14 @@ if [ "$code" = "200" ]; then report PASS "UI answers" "HTTP $code"; else report 
 # Container start time, used by checks 4 and 6.
 started=""
 started_s=0
+start_ok=1
 if [ -n "$edge_id" ]; then
   started=$(docker inspect -f '{{.State.StartedAt}}' "$edge_id" 2>&1)
-  started_s=$(date -u -d "$started" +%s 2>/dev/null || echo 0)
+  if ! started_s=$(date -u -d "$started" +%s 2>/dev/null) || [ -z "$started_s" ]; then
+    started_s=0
+    start_ok=0
+    report FAIL "container start time" "date cannot parse '$started'; the time-based checks below are not reliable"
+  fi
 fi
 
 # 4. Startup: every expected component logged "Activate <factory PID>".
@@ -172,7 +177,7 @@ else
     done
     if [ "${#missing[@]}" -eq 0 ]; then
       report PASS "startup activations" "all ${#EXPECTED_ACTIVATIONS[@]} found"
-    elif [ $((first_s - started_s)) -gt "$ROTATION_GRACE_S" ]; then
+    elif [ "$start_ok" -eq 1 ] && [ $((first_s - started_s)) -gt "$ROTATION_GRACE_S" ]; then
       report SKIP "startup activations" "the first log line is more than ${ROTATION_GRACE_S}s after the container started (log rotated, or its start unreadable); recreate the stack to re-run this check"
     else
       report FAIL "startup activations" "missing: ${missing[*]}"
@@ -212,16 +217,20 @@ else
   win_s=$((now_s - 60))
   floor_s=$((started_s + STEADY_IGNORE_S))
   if [ "$win_s" -lt "$floor_s" ]; then win_s=$floor_s; fi
-  since=$(date -u -d "@$win_s" +%Y-%m-%dT%H:%M:%SZ)
-  win_out=$(dc logs --no-log-prefix --since "$since" openems-edge 2>&1)
-  win_lines=$(printf '%s\n' "$win_out" | grep -c . || true)
-  errs=$(printf '%s\n' "$win_out" | grep -c ' ERROR ' || true)
-  if [ "$win_lines" -eq 0 ]; then
-    report FAIL "no recent errors" "no log lines at all in the last $((now_s - win_s)) s, so errors cannot be judged, $(log_hint)"
-  elif [ "$errs" -eq 0 ]; then
-    report PASS "no recent errors" "0 ERROR lines in the last $((now_s - win_s)) s"
+  since=$(date -u -d "@$win_s" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
+  if [ -z "$since" ]; then
+    report FAIL "no recent errors" "date could not compute the error window"
   else
-    report FAIL "no recent errors" "$errs ERROR lines in the last $((now_s - win_s)) s"
+    win_out=$(dc logs --no-log-prefix --since "$since" openems-edge 2>&1)
+    win_lines=$(printf '%s\n' "$win_out" | grep -c . || true)
+    errs=$(printf '%s\n' "$win_out" | grep -c ' ERROR ' || true)
+    if [ "$win_lines" -eq 0 ]; then
+      report FAIL "no recent errors" "no log lines at all in the last $((now_s - win_s)) s, so errors cannot be judged, $(log_hint)"
+    elif [ "$errs" -eq 0 ]; then
+      report PASS "no recent errors" "0 ERROR lines in the last $((now_s - win_s)) s"
+    else
+      report FAIL "no recent errors" "$errs ERROR lines in the last $((now_s - win_s)) s"
+    fi
   fi
 fi
 
