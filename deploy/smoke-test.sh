@@ -94,6 +94,15 @@ http_code() {
   printf '%s' "$code"
 }
 live_lines() { dc logs --no-log-prefix --since 20s openems-edge 2>&1 | grep -E "$LIVE_RE"; }
+# Called when a log read returned nothing: tells a damaged log file (--tail still
+# works) from Edge not logging at all. Docker prints no error for a damaged file.
+log_hint() {
+  if [ -n "$(dc logs --no-log-prefix --tail 1 openems-edge 2>&1 | head -n 1)" ]; then
+    echo "but --tail still works, so the container log file may be damaged (see docs/runbook.md)"
+  else
+    echo "and --tail returns nothing either, so Edge may not be logging"
+  fi
+}
 
 tmp=$(mktemp) || exit 2
 trap 'rm -f "$tmp"' EXIT
@@ -151,8 +160,10 @@ if [ -z "$edge_id" ]; then
 else
   dc logs --no-log-prefix --since "$started" openems-edge > "$tmp" 2>&1
   first=$(grep -m 1 -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}' "$tmp" || true)
-  if [ -z "$first" ]; then
-    report FAIL "startup activations" "no timestamped Edge log lines since the container started"
+  if [ ! -s "$tmp" ]; then
+    report FAIL "startup activations" "Docker returned no log lines since the container started, $(log_hint)"
+  elif [ -z "$first" ]; then
+    report FAIL "startup activations" "log lines exist but none has a timestamp"
   else
     first_s=$(date -u -d "$first" +%s 2>/dev/null || echo 0)
     missing=()
@@ -179,7 +190,12 @@ if [ "$count" -ge 1 ]; then
   defekt=$(dc logs --no-log-prefix --since 60s openems-edge 2>&1 | grep -c 'Defekte App' || true)
   info "'Defekte App' lines" "$defekt in the last 60 s (informational; see docs/runbook.md)"
 else
-  report FAIL "Debug Log is live" "no summary line in the last 20 s"
+  raw=$(dc logs --no-log-prefix --since 20s openems-edge 2>&1 | grep -c . || true)
+  if [ "$raw" -ge 1 ]; then
+    report FAIL "Debug Log is live" "log lines exist but none is a Debug Log summary (is ctrlDebugLog0 configured?)"
+  else
+    report FAIL "Debug Log is live" "no log lines in the last 20 s, $(log_hint)"
+  fi
 fi
 
 # 6. Steady state: no ERROR lines in the last minute, ignoring the first
@@ -197,8 +213,12 @@ else
   floor_s=$((started_s + STEADY_IGNORE_S))
   if [ "$win_s" -lt "$floor_s" ]; then win_s=$floor_s; fi
   since=$(date -u -d "@$win_s" +%Y-%m-%dT%H:%M:%SZ)
-  errs=$(dc logs --no-log-prefix --since "$since" openems-edge 2>&1 | grep -c ' ERROR ' || true)
-  if [ "$errs" -eq 0 ]; then
+  win_out=$(dc logs --no-log-prefix --since "$since" openems-edge 2>&1)
+  win_lines=$(printf '%s\n' "$win_out" | grep -c . || true)
+  errs=$(printf '%s\n' "$win_out" | grep -c ' ERROR ' || true)
+  if [ "$win_lines" -eq 0 ]; then
+    report FAIL "no recent errors" "no log lines at all in the last $((now_s - win_s)) s, so errors cannot be judged, $(log_hint)"
+  elif [ "$errs" -eq 0 ]; then
     report PASS "no recent errors" "0 ERROR lines in the last $((now_s - win_s)) s"
   else
     report FAIL "no recent errors" "$errs ERROR lines in the last $((now_s - win_s)) s"

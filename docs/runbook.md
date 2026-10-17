@@ -123,6 +123,12 @@ Before `down -v`, check `COMPOSE_PROJECT_NAME` really says `ke-ems-seedtest`.
   the kernel cannot calibrate the TSC clock and falls back to `acpi_pm`. The freezes
   first seen on 15 Oct 2026 did not recur on 16 Oct. Evidence and settings go in
   ADR 0004.
+- Stop the VM with `sudo poweroff` and wait until UTM shows it stopped. Do not close
+  the window or quit UTM while it runs (section 9).
+- After a cold boot on 17 Oct 2026 the stack came back on its own about 20 seconds
+  after the VM started (restart policy `unless-stopped`).
+- The TSC calibration failure repeats: it failed on 5 of the 7 boots recorded between
+  15 and 17 Oct 2026.
 - Optional heartbeat logger, to detect a frozen VM afterwards:
 
   ```bash
@@ -131,3 +137,31 @@ Before `down -v`, check `COMPOSE_PROJECT_NAME` really says `ke-ems-seedtest`.
   ```
 
   The second command prints every pause longer than 10 seconds.
+
+## 9. Damaged container log after an abrupt stop
+
+Seen on 17 Oct 2026. The VM had been stopped without a shutdown: the journal of that
+boot ends at the last SSH disconnect, with no shutdown messages. After the next boot
+the stack came back by itself and the Debug Log was running, but the smoke test failed.
+`docker compose logs --tail` worked, while `docker compose logs --since ...` printed
+**nothing and no error**. The container's raw JSON log file held one undecodable line
+out of 25,551 (line 21,828). Our reading, not verified in Docker's source: Docker stops
+reading at the damaged line. The smoke test now fails loudly in this case and says
+"the container log file may be damaged".
+
+Check by hand:
+
+```bash
+sudo docker compose logs --tail 3 openems-edge      # still works
+sudo docker compose logs --since 20s openems-edge   # prints nothing while the Debug Log runs
+```
+
+Fix. This keeps the volumes. Edge restarts (about a minute), the simulated battery
+resets to 50 %, and the old log file is deleted together with the old container:
+
+```bash
+sudo docker compose up -d --force-recreate openems-edge openems-ui
+sudo bash smoke-test.sh
+```
+
+Prevention: stop the VM with `sudo poweroff` (section 8).
