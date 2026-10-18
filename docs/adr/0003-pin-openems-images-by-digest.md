@@ -1,7 +1,8 @@
 # ADR 0003: Pin OpenEMS images by tag and digest
 
-- Status: Accepted for v0.1 (revisit after M2 validation)
+- Status: Accepted for v0.1. M2 validation passed on amd64 (see Open points). Revisit when updating a pin.
 - Date: 2026-10-15
+- Updated: 2026-10-17
 
 ## Context
 
@@ -27,7 +28,8 @@ Conflicting sources, recorded and not resolved by guessing:
 
 1. Run `docker buildx imagetools inspect <image>:<new tag>` for both images and confirm the tag exists for the platforms we use.
 2. Read the upstream release notes for the new version.
-3. Update both values in `deploy/.env.example`, run the smoke test, and record the change in `CHANGELOG.md` and in a new ADR if behaviour changes.
+3. Read the Edge image's start-up script again, because the seed service in `deploy/compose.yaml` depends on it: `/etc/s6-overlay/s6-rc.d/init-openems-config/run` installs the image's default config only into an empty config directory, and reads it from `/var/lib/openems-default-config` (read in 2026.9.0 on 2026-10-16; the command is in `docs/runbook.md`, section 7).
+4. Update both values in `deploy/.env.example`, test on a fresh volume, run `deploy/smoke-test.sh` (see `docs/runbook.md`), and record the change in `CHANGELOG.md` and in a new ADR if behaviour changes.
 
 ## Consequences
 
@@ -35,8 +37,9 @@ Conflicting sources, recorded and not resolved by guessing:
 - Pins do not receive upstream security fixes until we update them on purpose.
 - The image licences have not been checked. ADR 0002 records the OpenEMS README statement (via mirrors) that Edge is under EPL-2.0 and the UI under AGPL-3.0. Re-check against the official repository before distributing any image or modified source. This is not legal advice.
 - Only the amd64 builds have been run (ADR 0004). The arm64 builds exist in the registry but are untested here until the optional hardware milestone.
+- The seed service relies on two internals of the Edge image: its start-up script and the default-config path. A new image can change them, so every pin update repeats the check above.
 
 ## Open points
 
-- Whether the upstream images run correctly with the compose settings in `deploy/compose.yaml`. M2 validation decides this.
+- Resolved for amd64 on 2026-10-16 and 2026-10-17: both images run with the compose settings in `deploy/compose.yaml`. `deploy/smoke-test.sh` passed on the long-running stack, after a container recreate, after a clean reboot and on fresh volumes (see `docs/runbook.md`). arm64 is untested.
 - Pins for the Python layer, MQTT broker and database. Chosen in the milestones that add them.

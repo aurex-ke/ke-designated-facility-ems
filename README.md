@@ -4,7 +4,7 @@
 
 An open-source, simulation-first reference implementation of an energy management system (EMS) for Kenyan designated facilities. A designated facility is a commercial, industrial or institutional site above the energy-use threshold set in Kenyan regulation (see [docs/problem-statement.md](docs/problem-statement.md)).
 
-**Current status: v0.1 in development. Milestone M1 (documentation) only. No code exists yet.**
+**Current status: v0.1 in development. Milestones M1 (documentation) and M2 (OpenEMS Edge and its UI in Docker Compose, with a simulated household example) are complete. No Python code and no hotel scenario exist yet.**
 
 ## v0.1 scenario
 
@@ -19,6 +19,10 @@ A simulated 60-room hotel, ID `hotel-60rooms-sim-v1`. The hotel size, load profi
 
 See [docs/adr/0002-openems-edge-plus-python-layer.md](docs/adr/0002-openems-edge-plus-python-layer.md).
 
+## Try the simulated stack
+
+`deploy/` runs OpenEMS Edge and its built-in UI in Docker Compose with a small simulated example: a household load profile, a battery and a balancing controller. It is not the hotel. It was tested on one setup only, Ubuntu Server 26.04 (amd64) in a UTM virtual machine. See [docs/runbook.md](docs/runbook.md) for the commands, the smoke test and the known log messages.
+
 ## Out of scope for v0.1
 
 Utility API integration, authentication, multi-site support, real hardware, billing, M-Pesa, and a custom dashboard.
@@ -27,8 +31,8 @@ Utility API integration, authentication, multi-site support, real hardware, bill
 
 | ID | Milestone | Status |
 |---|---|---|
-| M1 | Repo, README, problem statement, architecture decision records | In progress |
-| M2 | OpenEMS Edge with simulators in Docker Compose | Planned |
+| M1 | Repo, README, problem statement, architecture decision records | Complete |
+| M2 | OpenEMS Edge with simulators in Docker Compose | Complete |
 | M3 | Hotel load generator and sub-meter data | Planned |
 | M4 | Ingestion and storage | Planned |
 | M5 | Tariff model and one peak-shifting scenario | Planned |

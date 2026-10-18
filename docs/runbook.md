@@ -3,8 +3,9 @@
 Development stack, simulation only. Nothing is deployed anywhere. OpenEMS is run
 unmodified from its upstream images. This project is not affiliated with OpenEMS.
 
-Tested on 16 Oct 2026 only on this setup: Ubuntu Server 26.04.1 LTS (amd64) in a
-UTM virtual machine on an Intel Mac, Docker Engine 29.9.0, Compose plugin 5.6.0.
+Tested on 16 and 17 Oct 2026 only on this setup: Ubuntu Server 26.04.1 LTS (amd64) in a
+UTM 4.7.5 virtual machine on an Intel Mac, Docker Engine 29.9.0 (29.9.1 from 17 Oct),
+Compose plugin v5.6.0.
 
 ## 1. First start
 
@@ -102,7 +103,7 @@ Before `down -v`, check `COMPOSE_PROJECT_NAME` really says `ke-ems-seedtest`.
 | `WARN Unable to find ObjectClassDefinition ...` | Upstream wording for several core components at start. No effect observed. |
 | `ERROR Authentication failed` for `authenticateWithToken` | Seen twice at the first browser load, before the guest login. Probably the UI trying a stored token (inference). |
 | `ERROR Unable to read historic data: None of the requested Channels is available` | Seen once, before any simulated component existed. Not seen since. |
-| `_appManager[...] State:INFO: Defekte App erkannt` with `App.Core.Meta[Missing configuration for instance ...]` | Seen on every Debug Log line after the first start on a fresh volume, in both fresh-volume runs on 16 Oct 2026: 300 consecutive lines in the first run (about 5 minutes at one line per second, my arithmetic) and 17 lines at the second run's first check, right after start. Absent after restarts on an already initialised volume: 0 lines across the whole retained log after the 16 Oct 11:22 restart, and 0 lines in the window from about 15 to 75 seconds after the 17 Oct recreate (a period in which a fresh volume showed 17). After the 17 Oct cold boot the sum state read Ok at the first checks, taken well after start; the first minutes were not checked. Unknown whether it is a normal first-start phase or caused by our seed order: the long-running stack had no Debug Log during its first minutes, so its own first-start state was never seen. The Core config files were identical on both volumes. The simulated chain kept running and the sum state showed Info meanwhile. The smoke test prints the sum state and the count of these lines for information. Open: how long it lasts on a fresh volume. |
+| `_appManager[...] State:INFO: Defekte App erkannt` with `App.Core.Meta[Missing configuration for instance ...]` | Seen on every Debug Log line after the first start on a fresh volume, in both fresh-volume runs on 16 Oct 2026: 300 consecutive lines in the first run (about 5 minutes at one line per second, my arithmetic) and 17 lines at the second run's first check, right after start. Absent after restarts on an already initialised volume: 0 lines across the whole retained log after the 16 Oct 11:22 restart, and 0 lines in the window from about 15 to 75 seconds after the 17 Oct recreate (a period in which a fresh volume showed 17). After the 17 Oct cold boot the sum state read Ok at the first checks, taken well after start; the first minutes were not checked. Unknown whether it is a normal first-start phase or caused by our seed order: the long-running stack had no Debug Log during its first minutes, so its own first-start state was never seen. The Core config files were identical on both volumes. The simulated chain kept running and the sum state showed Info meanwhile. The smoke test prints the sum state and the count of these lines for information. A third fresh volume on 17 Oct, after the package updates, repeated it: first line 19:51:58, last line 19:56:57, again exactly 300 lines, and a check after 8 minutes showed 0 lines and sum state Ok. So in both runs observed to the end it lasted 300 consecutive lines (about 5 minutes) and then stopped. Whether our seed order contributes is not separated. |
 
 ## 7. Updating the OpenEMS images
 
@@ -121,14 +122,15 @@ Before `down -v`, check `COMPOSE_PROJECT_NAME` really says `ke-ems-seedtest`.
 
 - The VM uses UTM CPU type "max" and the kernel option `tsc=reliable`. On some boots
   the kernel cannot calibrate the TSC clock and falls back to `acpi_pm`. The freezes
-  first seen on 15 Oct 2026 did not recur on 16 Oct. Evidence and settings go in
+  first seen on 15 Oct 2026 did not recur on 16 or 17 Oct. The evidence and settings are in
   ADR 0004.
 - Stop the VM with `sudo poweroff` and wait until UTM shows it stopped. Do not close
   the window or quit UTM while it runs (section 9).
 - After a cold boot on 17 Oct 2026 the stack came back on its own about 20 seconds
   after the VM started (restart policy `unless-stopped`).
-- The TSC calibration failure repeats: it failed on 5 of the 7 boots recorded between
-  15 and 17 Oct 2026.
+- The TSC calibration failure repeats: it failed on 6 of the 9 boots recorded between
+  15 and 17 Oct 2026. After the changes, `tsc` stayed in use for at least 49 minutes on a
+  boot that did calibrate (ADR 0004).
 - Optional heartbeat logger, to detect a frozen VM afterwards:
 
   ```bash
