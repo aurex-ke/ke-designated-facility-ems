@@ -89,6 +89,14 @@ Before `down -v`, check `COMPOSE_PROJECT_NAME` really says `ke-ems-seedtest`.
   discharge. It reached about 0 % within roughly 4 to 5 hours in two observations
   on 16 Oct 2026. After that the grid carries all consumption. A restart sets it
   back to 50 %. The smoke test therefore never asserts values.
+- **Reproducibility of this chain is not established.** The first Debug Log readings
+  differed between starts: consumption 1811 W at the first start (07:29 UTC on
+  16 Oct) and 863 W after the 11:22 UTC restart. That fits the load profile following
+  the time of day, but it is an inference: the grid meter file also holds a fixed
+  `startTime`. Identical runs from this chain are therefore not claimed. The
+  Simulator App's batch mode, which takes a clock and load profiles in one request
+  (OpenEMS "Simulated Components" page, retrieved 2026-10-16), is the planned route
+  for reproducible scenarios in milestones 3 and 5. It has not been tried.
 - Edge history survives a restart because the data volume is kept.
 - Observed on 16 Oct 2026: Edge used about 260 to 420 MiB (cap 2 GiB), and the data
   volume was about 96 MB.
