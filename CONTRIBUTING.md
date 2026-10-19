@@ -10,6 +10,8 @@ This is a **simulation-first** reference project. Nothing here is deployed, ther
 - **Correct a fact or a citation.** Use the "Data correction" issue form and include the source URL and the date you read it.
 - **Report a bug** in the compose stack, the seed files, the smoke test or the runbook.
 - **Review the docs** (`docs/runbook.md`, `docs/adr/`) for errors, gaps or unclear wording.
+- **Suggest hotel load profile references**, with sources, for the simulated 60-room hotel.
+- **Point out OpenEMS simulator components** that fit PV and storage, citing the official OpenEMS documentation.
 
 ## Running and testing locally
 
