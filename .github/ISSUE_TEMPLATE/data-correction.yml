@@ -1,0 +1,42 @@
+name: Data correction
+description: A fact, number, regulation reference or licence statement in the docs is wrong or outdated.
+title: "data: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Corrections need a source. If two sources disagree, please link both and we will record the conflict.
+  - type: input
+    id: file
+    attributes:
+      label: File and location
+      description: Path and section or line, for example `docs/problem-statement.md`, section 2.
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What is wrong?
+      description: Quote the statement as it appears now.
+    validations:
+      required: true
+  - type: textarea
+    id: correct
+    attributes:
+      label: What should it say?
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source URL
+      description: Link to the official or primary source where possible.
+    validations:
+      required: true
+  - type: input
+    id: retrieved
+    attributes:
+      label: Date you read the source
+      description: Format YYYY-MM-DD.
+    validations:
+      required: true

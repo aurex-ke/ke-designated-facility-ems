@@ -1,0 +1,45 @@
+name: Bug report
+description: Something in the compose stack, seed files, smoke test or runbook does not work as documented.
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is a simulation-only project. Please do not paste secrets, credentials or personal data.
+        For security problems, use the Security tab ("Report a vulnerability") instead of this form.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands or actions, in order. Say which runbook section you followed.
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Repository commit
+      description: Output of `git rev-parse --short HEAD`.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, CPU architecture, Docker Engine and Compose versions, and whether you run in a VM.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Smoke test output or log lines. Remove anything private.
+      render: shell
+    validations:
+      required: false
