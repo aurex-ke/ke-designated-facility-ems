@@ -61,6 +61,12 @@ Using those documented defaults is a **development-only exception**, accepted on
 16 Oct 2026 for a loopback-only stack reached through an SSH tunnel. Never expose
 these ports and never ship this setup with default logins.
 
+Keep `BIND_ADDRESS` in `deploy/.env` on the loopback address (`127.0.0.1`). The smoke test
+sends plain `http://` requests to that address, and the UI and console logins above also
+use plain HTTP. With any other value, that traffic and those logins would cross a network
+unencrypted. This is why the two clear-text-protocol code-scanning alerts on
+`deploy/smoke-test.sh` were dismissed as "Won't fix" on 19 Oct 2026.
+
 ## 4. Start again from the seed, or test a second copy
 
 Reset the real stack (destructive: deletes Edge configuration and history):
