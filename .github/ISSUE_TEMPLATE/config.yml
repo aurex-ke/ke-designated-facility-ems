@@ -1,5 +1,1 @@
 blank_issues_enabled: true
-contact_links:
-  - name: Report a security vulnerability
-    url: https://github.com/aurex-ke/ke-designated-facility-ems/security/policy
-    about: Read the security policy and report privately. Please do not open a public issue for vulnerabilities.
