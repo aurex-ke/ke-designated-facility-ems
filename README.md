@@ -52,6 +52,10 @@ This project summarises public regulations for engineering purposes. It is not l
 
 MIT for this repository's own code and text (see [LICENSE](LICENSE)). OpenEMS is credited under its own licences in [NOTICE.md](NOTICE.md). This project is not affiliated with or endorsed by OpenEMS.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for what helps right now and the evidence rules. Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Contact
 
-Open a GitHub Issue on this repository.
+Open a GitHub Issue on this repository. For security vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of opening a public issue.

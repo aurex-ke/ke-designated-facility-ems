@@ -17,6 +17,7 @@ All notable changes are recorded here. The format follows Keep a Changelog, and 
 - `deploy/smoke-test.sh`: checks the containers, console protection, the UI, startup activations, the live Debug Log and steady-state errors.
 - `docs/runbook.md`: start, stop, reset, tunnel, known log messages, image update checklist and VM notes.
 - ADR 0005 (documented default logins are allowed in the development stack only).
+- `CONTRIBUTING.md`, `SECURITY.md` and `CODE_OF_CONDUCT.md` (adopts Contributor Covenant 3.0 by link), plus issue forms for bug reports and data corrections.
 
 ### Changed
 

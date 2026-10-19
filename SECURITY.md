@@ -23,7 +23,7 @@ If you cannot see that button, open a public issue titled "Security contact requ
 
 ## What is not in scope
 
-- The documented OpenEMS default logins (Felix console and UI) on loopback in the development stack. This is a recorded, dev-only exception: see `docs/adr/0005-*`.
+- The documented OpenEMS default logins (Felix console and UI) on loopback in the development stack. This is a recorded, dev-only exception: see [ADR 0005](docs/adr/0005-dev-only-default-credentials-exception.md).
 - Vulnerabilities in upstream OpenEMS, Docker or the operating system. Please report those to their own projects.
 - Anything that requires running the stack on a public network contrary to the runbook.
 
