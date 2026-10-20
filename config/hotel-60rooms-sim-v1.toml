@@ -22,6 +22,17 @@ seed = { value = 1, definition = "Fixed seed so that runs are reproducible. A di
 start_date = { value = 2026-01-01, definition = "First simulated day. A calendar convenience, not real data for that year." }
 days = { value = 365, definition = "One non-leap year of simulated data." }
 step_minutes = { value = 15, unit = "minutes", definition = "Output resolution. Chosen to match the 15-minute example in an OpenEMS community forum post (community.openems.io, read 20 Oct 2026); not yet tested against OpenEMS 2026.9.0." }
+utc_offset_minutes = { value = 180, unit = "minutes", definition = "Fixed offset of all timestamps from UTC: East Africa Time, UTC+3. Kenya observes no daylight saving time (from memory, verify before publishing)." }
 
 [output]
 directory = { value = "data/loadgen", definition = "Default output folder. The repository .gitignore already excludes data/, so generated files are not committed." }
+
+# Flat TEST FIXTURE constants, used only by the `fixture` command to prove the
+# file-writing plumbing. They are NOT hotel data and no real load is implied.
+[fixture]
+hvac_kw = { value = 10.0, unit = "kW", definition = "Flat test-fixture constant. Not hotel data, not a measurement." }
+kitchen_kw = { value = 5.0, unit = "kW", definition = "Flat test-fixture constant. Not hotel data, not a measurement." }
+laundry_kw = { value = 4.0, unit = "kW", definition = "Flat test-fixture constant. Not hotel data, not a measurement." }
+hot_water_kw = { value = 6.0, unit = "kW", definition = "Flat test-fixture constant. Not hotel data, not a measurement." }
+lighting_kw = { value = 3.0, unit = "kW", definition = "Flat test-fixture constant. Not hotel data, not a measurement." }
+other_kw = { value = 2.0, unit = "kW", definition = "Flat test-fixture constant. Not hotel data, not a measurement." }
