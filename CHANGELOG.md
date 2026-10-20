@@ -18,12 +18,18 @@ All notable changes are recorded here. The format follows Keep a Changelog, and 
 - `docs/runbook.md`: start, stop, reset, tunnel, known log messages, image update checklist and VM notes.
 - ADR 0005 (documented default logins are allowed in the development stack only).
 - `CONTRIBUTING.md`, `SECURITY.md` and `CODE_OF_CONDUCT.md` (adopts Contributor Covenant 3.0 by link), plus issue forms for bug reports and data corrections.
+- Load-generator foundation (M3, in progress): `pyproject.toml`, `config/hotel-60rooms-sim-v1.toml` and a configuration loader that rejects any parameter without a source, assumption or definition.
+- Timestamp grid, deterministic CSV writer and a flat test-fixture generator with a metadata file (SHA-256 of the config and of the output). The fixture is constant test data, not hotel data.
+- `python -m ke_ems.loadgen fixture <config>` command. The config gained `simulation.utc_offset_minutes` and a `[fixture]` section.
+- Standard-library `unittest` tests for the loader, grid, writer, fixture and command.
 
 ### Changed
 
 - Compose: the Edge websocket port 8085 is no longer published. Added an Edge memory cap and container log rotation, both set in `deploy/.env.example`.
 - ADR 0003 and ADR 0004 updated with the M2 evidence: clock behaviour, UTM version, OS updates and the image start-up dependency.
-- README status and milestone table: M1 and M2 complete.
+- README status and milestone table: M1 and M2 complete; M3 in progress, with a load-generator section.
+- Runbook: warning that `BIND_ADDRESS` must stay on the loopback address.
+- Problem statement: regulation facts updated from the full gazette text of both regulations, read 2026-10-20. This corrects an earlier statement: the net-metering limit for commercial and industrial systems is both 1 MW and the maximum demand of the previous twelve months (regulation 6(1)(b)).
 
 ### Fixed
 
