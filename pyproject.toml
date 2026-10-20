@@ -1,0 +1,9 @@
+[project]
+name = "ke-ems"
+version = "0.0.0"
+description = "Simulation-first load generator and reports for ke-designated-facility-ems. Simulation only."
+requires-python = ">=3.11"
+dependencies = []
+
+# No build backend is configured on purpose: the package is run from source
+# with PYTHONPATH=src (see tests/README.md). Add one only when packaging is needed.

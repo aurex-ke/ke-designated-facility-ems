@@ -1,0 +1,27 @@
+# Load-generator settings for the simulated 60-room hotel (hotel-60rooms-sim-v1).
+# SIMULATION ONLY: nothing here describes a real hotel.
+#
+# Every parameter is a table with a `value` and exactly one provenance key:
+#   source     = "citation"   (also needs retrieved = YYYY-MM-DD)
+#   assumption = "rationale"  (optional min / max give the plausible range)
+#   definition = "rationale"  (a project choice, not a measurement)
+# The loader (src/ke_ems/loadgen/config.py) rejects anything else.
+# See config/README.md.
+
+[meta]
+schema_version = 1
+id = "hotel-60rooms-sim-v1"
+description = "Settings for the synthetic load generator. Simulation only."
+
+[hotel]
+rooms = { value = 60, definition = "Project definition of the simulated hotel (ID hotel-60rooms-sim-v1). Not a measured property." }
+climate = { value = "Nairobi highland", definition = "Owner decision, 20 Oct 2026: Nairobi-type highland climate. Temperature parameters are added later from a primary climate source that has been read in full." }
+
+[simulation]
+seed = { value = 1, definition = "Fixed seed so that runs are reproducible. A different seed produces a different dataset." }
+start_date = { value = 2026-01-01, definition = "First simulated day. A calendar convenience, not real data for that year." }
+days = { value = 365, definition = "One non-leap year of simulated data." }
+step_minutes = { value = 15, unit = "minutes", definition = "Output resolution. Chosen to match the 15-minute example in an OpenEMS community forum post (community.openems.io, read 20 Oct 2026); not yet tested against OpenEMS 2026.9.0." }
+
+[output]
+directory = { value = "data/loadgen", definition = "Default output folder. The repository .gitignore already excludes data/, so generated files are not committed." }
